@@ -17,7 +17,7 @@ def grade(pop, target):
     """ Find average fitness for a population. """
     return sum(fitness(x, target) for x in pop) / len(pop)
 
-def evolve(pop, target, retain=0.3, random_select=0.02, mutate=0.23, i_min=0, i_max=200):
+def evolve(pop, target, retain=0.3, random_select=0.02, mutate=0.01, i_min=0, i_max=200):
     graded = [(fitness(x, target), x) for x in pop]
     graded.sort(key=lambda t: t[0])
     parents = [x[1][:] for x in graded[:int(len(graded)*retain)]]
@@ -53,7 +53,7 @@ def evolve(pop, target, retain=0.3, random_select=0.02, mutate=0.23, i_min=0, i_
 # --- Fast target finding demo ---
 
 target = 173
-p_count = 100   # Higher population for faster coverage
+p_count = 50   # Higher population for faster coverage
 i_length = 1    # One value per individual
 i_min = 0
 i_max = 200
@@ -91,6 +91,6 @@ plt.figure(figsize=(10, 6))
 plt.plot(fitness_history, marker='o')
 plt.xlabel('Generation')
 plt.ylabel('Average Fitness')
-plt.title(f'GA Optimization - Target {target} (Stopped at Gen {len(fitness_history)-1})')
+plt.title(f'GA Optimisation - Target {target} (Stopped at Gen {len(fitness_history)-1})')
 plt.grid(True, alpha=0.3)
 plt.show()
