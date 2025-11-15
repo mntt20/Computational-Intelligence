@@ -45,24 +45,13 @@ def two_point_crossover(p1, p2):
     c2 = p2[:a] + p1[a:b] + p2[b:]
     return c1, c2
 
-# ---------------- Mutation ----------------
-
-def mutate_individual(ind, min_val, max_val, pm=0.1, step=1):
-    """Per-gene random perturbation by ±step with prob pm."""
-    child = ind[:]
-    for i in range(len(child)):
-        if random() < pm:
-            delta = randint(-step, step)
-            child[i] = max(min_val, min(max_val, child[i] + delta))
-    return child
-
 # ---------------- Evolution (pure GA) ----------------
 
 def evolve(pop, target_coeffs,
            min_val=-100, max_val=100,
            elitism=2,  # keep top-k unchanged
            tournament_k=3,
-           pc=0.9,     # crossover probability
+           pc=0.8,     # crossover probability
            pm=0.15,    # per-gene mutation probability
            step=1):
     # Elitism
@@ -83,132 +72,23 @@ def evolve(pop, target_coeffs,
         else:
             c1, c2 = p1[:], p2[:]
 
-        # mutation
-        c1 = mutate_individual(c1, min_val, max_val, pm=pm, step=step)
+        # mutation (random reset)
+        for g in range(len(c1)):
+            if random() < pm:
+                c1[g] = randint(min_val, max_val)
+        for g in range(len(c2)):
+            if random() < pm:
+                c2[g] = randint(min_val, max_val)
+
+        # append
         if len(next_pop) < N:
             next_pop.append(c1)
         if len(next_pop) < N:
-            c2 = mutate_individual(c2, min_val, max_val, pm=pm, step=step)
             next_pop.append(c2)
 
     # exact size
     return next_pop[:N]
 
-# ---------------- Parameter Sweep and Plotting ----------------
-
-def generations_to_solution(target_coeffs, N, pc, pm, max_generations,
-                            elitism=4, k=3, step=1, coeff_min=-100, coeff_max=100, genome_len=6):
-    pop = population(N, genome_len, coeff_min, coeff_max)
-    for gen in range(max_generations):
-        best = min(pop, key=lambda x: fitness(x, target_coeffs))
-        if fitness(best, target_coeffs) == 0.0:
-            return gen
-        pop = evolve(pop, target_coeffs,
-                     min_val=coeff_min, max_val=coeff_max,
-                     elitism=elitism, tournament_k=k,
-                     pc=pc, pm=pm, step=step)
-    return max_generations  # cap if not solved
-
-def sweep_mutation_rates(target_coeffs,
-                         mutation_rates,
-                         trials=10,
-                         N=150, pc=0.90, max_generations=350,
-                         elitism=4, k=3, step=1,
-                         coeff_min=-100, coeff_max=100, genome_len=6):
-    means, stds, solve_rates = [], [], []
-    for pm in mutation_rates:
-        gens = []
-        for _ in range(trials):
-            g = generations_to_solution(target_coeffs, N=N, pc=pc, pm=pm, max_generations=max_generations,
-                                        elitism=elitism, k=k, step=step,
-                                        coeff_min=coeff_min, coeff_max=coeff_max, genome_len=genome_len)
-            gens.append(g)
-        arr = np.array(gens, dtype=int)
-        means.append(arr.mean())
-        stds.append(arr.std(ddof=1))
-        solve_rates.append((arr < max_generations).mean())
-        print(f"pm={pm:.3f} | mean={arr.mean():.1f}, std={arr.std(ddof=1):.1f}, solve_rate={100*solve_rates[-1]:.0f}%")
-    return np.array(means), np.array(stds), np.array(solve_rates)
-
-
-def plot_mutation_sweep(mutation_rates, means, stds,
-                        fixed_pc=0.90, fixed_N=150, trials=12, max_generations=350):
-    plt.figure(figsize=(8.5,5))
-    plt.errorbar(mutation_rates, means, yerr=stds, fmt='-o', capsize=4, linewidth=1.6,
-                 label=f'pc={fixed_pc}, Population={fixed_N}, Trials={trials}, Cap={max_generations}')
-    plt.xlabel('Mutation rate (pm)')
-    plt.ylabel('Mean generations to exact solution')
-    plt.title('Effect of Mutation Rate on GA Convergence')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.show()
-
-def sweep_crossover_rates(target_coeffs,
-                          crossover_rates,
-                          trials=10,
-                          N=150, pm=0.12, max_generations=350,
-                          elitism=4, k=3, step=1,
-                          coeff_min=-100, coeff_max=100, genome_len=6):
-    means, stds, solve_rates = [], [], []
-    for pc in crossover_rates:
-        gens = []
-        for _ in range(trials):
-            g = generations_to_solution(target_coeffs, N=N, pc=pc, pm=pm, max_generations=max_generations,
-                                        elitism=elitism, k=k, step=step,
-                                        coeff_min=coeff_min, coeff_max=coeff_max, genome_len=genome_len)
-            gens.append(g)
-        arr = np.array(gens, dtype=int)
-        means.append(arr.mean())
-        stds.append(arr.std(ddof=1))
-        solve_rates.append((arr < max_generations).mean())
-        print(f"pc={pc:.2f} | mean={arr.mean():.1f}, std={arr.std(ddof=1):.1f}, solve_rate={100*solve_rates[-1]:.0f}%")
-    return np.array(means), np.array(stds), np.array(solve_rates)
-
-def plot_crossover_sweep(crossover_rates, means, stds,
-                         fixed_pm=0.12, fixed_N=150, trials=12, max_generations=350):
-    plt.figure(figsize=(8.5,5))
-    plt.errorbar(crossover_rates, means, yerr=stds, fmt='-o', capsize=4, linewidth=1.6,
-                 label=f'pm={fixed_pm}, Population={fixed_N}, Trials={trials}, Cap={max_generations}')
-    plt.xlabel('Crossover probability (pc)')
-    plt.ylabel('Mean generations to exact solution')
-    plt.title('Effect of Crossover Probability on GA Convergence')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.show()
-
-
-def sweep_population_sizes(target_coeffs,
-                           pop_sizes,
-                           trials=10,
-                           pc=0.90, pm=0.12, max_generations=350,
-                           elitism=4, k=3, step=1,
-                           coeff_min=-100, coeff_max=100, genome_len=6):
-    means, stds, solve_rates = [], [], []
-    for N in pop_sizes:
-        gens = []
-        for _ in range(trials):
-            g = generations_to_solution(target_coeffs, N=N, pc=pc, pm=pm, max_generations=max_generations,
-                                        elitism=elitism, k=k, step=step,
-                                        coeff_min=coeff_min, coeff_max=coeff_max, genome_len=genome_len)
-            gens.append(g)
-        arr = np.array(gens, dtype=int)
-        means.append(arr.mean())
-        stds.append(arr.std(ddof=1))
-        solve_rates.append((arr < max_generations).mean())
-        print(f"Population ={N} | Mean={arr.mean():.1f}, Standard Deviation={arr.std(ddof=1):.1f}, Solve Rate={100*solve_rates[-1]:.0f}%")
-    return np.array(means), np.array(stds), np.array(solve_rates)
-
-def plot_population_sweep(pop_sizes, means, stds,
-                          fixed_pm=0.12, fixed_pc=0.90, trials=12, max_generations=350):
-    plt.figure(figsize=(8.5,5))
-    plt.errorbar(pop_sizes, means, yerr=stds, fmt='-o', capsize=4, linewidth=1.6,
-                 label=f'pm={fixed_pm}, pc={fixed_pc}, Trials={trials}, Cap={max_generations}')
-    plt.xlabel('Population size (N)')
-    plt.ylabel('Mean generations to exact solution')
-    plt.title('Effect of Population Size on GA Convergence')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.show()
 
 # ---------------- Bit encoding for schema analysis ----------------
 
@@ -250,9 +130,9 @@ def schema_predict_next_m(mH, fH, fbar, pc, pm, deltaH, orderH, L):
     # Holland's schema theorem (lower bound)
     if mH == 0 or fbar == 0:
         return 0.0
-    crossover_survival = max(0.0, 1.0 - pc * (deltaH / max(1, (L - 1))))
-    mutation_survival = (1.0 - pm) ** orderH
-    return mH * (fH / fbar) * crossover_survival * mutation_survival
+    crossover_effect = max(0.0, 1.0 - pc * (deltaH / max(1, (L - 1))))
+    mutation_effect = (1.0 - pm) ** orderH
+    return mH * (fH / fbar) * crossover_effect * mutation_effect
 
 # ---------------- Schema experiment runner ----------------
 
@@ -264,8 +144,8 @@ def make_schema_from_positions(L, fixed_positions):
     return ''.join(s)
 
 def schema_experiment(target_coeffs,
-                      bits_per_coeff=16,
-                      pc=0.9, pm=0.12,
+                      bits_per_coeff=6,
+                      pc=0.8, pm=0.12,
                       N=150, generations=200,
                       coeff_min=-100, coeff_max=100,
                       elitism=4, k=3, step=1):
@@ -276,16 +156,17 @@ def schema_experiment(target_coeffs,
     """
     L = bits_per_coeff * len(target_coeffs)
 
-    # Define two schemata with same order (e.g., o=6), different δ
-    order = 6
+    # Define two schemata with same order
+    order = 3
 
-    # Short schema: cluster 6 fixed bits in a tight block near the start
+    # Short schema: cluster 3 fixed bits in a tight block near the start
     short_idxs = list(range(8, 8+order))  # contiguous block
     short_positions = {i: ('1' if j % 2 == 0 else '0') for j, i in enumerate(short_idxs)}
     H_short = make_schema_from_positions(L, short_positions)
 
-    # Long schema: spread the same 6 fixed bits across chromosome
-    long_idxs = [1, L//5, 2*L//5, 3*L//5, 4*L//5, L-2]
+    # Long schema: spread the same 3 fixed bits across chromosome
+    # long_idxs = [1, L//5, 2*L//5, 3*L//5, 4*L//5, L-2]
+    long_idxs = [1, 2*L//5, L-1]
     long_positions = {i: ('1' if j % 2 == 0 else '0') for j, i in enumerate(long_idxs)}
     H_long = make_schema_from_positions(L, long_positions)
 
@@ -294,7 +175,7 @@ def schema_experiment(target_coeffs,
     print(f"H_short: order={oS}, delta={dS}")
     print(f"H_long : order={oL}, delta={dL}")
 
-    # Initialize GA population
+    # Initialise GA population
     pop = population(N, len(target_coeffs), coeff_min, coeff_max)
 
     # Logs
@@ -323,7 +204,7 @@ def schema_experiment(target_coeffs,
         log['fH_long'].append(fHL)
         log['fbar'].append(fbar)
 
-        # Early stop if exact found (optional)
+        # Early stop if exact found
         best = min(pop, key=lambda x: fitness(x, target_coeffs))
         if fitness(best, target_coeffs) == 0.0:
             print(f"Exact coefficients found at gen {gen}.")
@@ -334,6 +215,26 @@ def schema_experiment(target_coeffs,
                      min_val=coeff_min, max_val=coeff_max,
                      elitism=elitism, tournament_k=k,
                      pc=pc, pm=pm, step=step)
+        
+        selection_short = (fHS / fbar) if fbar > 0 else 0
+        crossover_short = 1 - pc * (dS / (L - 1))
+        mutation_short = (1 - pm) ** oS
+        print(f"Gen {gen} -- SHORT SCHEMA")
+        print(f"  m(H,k)={mS},   selection={selection_short:.3f}, crossover={crossover_short:.3f}, mutation={mutation_short:.3f}")
+        print(f"  pred_next_count={predS:.2f}")
+        if gen > 0: # show actual count next gen
+            print(f"  actual_next_count={log['m_short'][gen]}")
+
+            # --- Print schema effects for H_long ---
+        selection_long = (fHL / fbar) if fbar > 0 else 0
+        crossover_long = 1 - pc * (dL / (L - 1))
+        mutation_long = (1 - pm) ** oL
+        print(f"Gen {gen} -- LONG SCHEMA")
+        print(f"  m(H,k)={mL},   selection={selection_long:.3f}, crossover={crossover_long:.3f}, mutation={mutation_long:.3f}")
+        print(f"  pred_next_count={predL:.2f}")
+        if gen > 0:
+            print(f"  actual_next_count={log['m_long'][gen]}")
+        print("-"*38)
 
     return log, {'H_short': H_short, 'H_long': H_long, 'L': L, 'oS': oS, 'oL': oL, 'dS': dS, 'dL': dL, 'pc': pc, 'pm': pm}
 
@@ -367,16 +268,105 @@ def plot_schema_results(log, meta):
     plt.tight_layout()
     plt.show()
 
-    # Optional: selection multiplier f(H)/f̄
-    ratio_short = [(fh/fb) if fb>0 and fh>0 else 0 for fh,fb in zip(log['fH_short'], log['fbar'])]
-    ratio_long  = [(fh/fb) if fb>0 and fh>0 else 0 for fh,fb in zip(log['fH_long'],  log['fbar'])]
-    plt.figure(figsize=(9,4))
-    plt.plot(log['gen'], ratio_short, label='f(H_short)/f̄', color='green')
-    plt.plot(log['gen'], ratio_long, label='f(H_long)/f̄', color='red')
-    plt.axhline(1.0, color='gray', linestyle=':')
-    plt.xlabel('Generation'); plt.ylabel('Selection multiplier'); plt.title('Schema selection advantage')
-    plt.grid(True, alpha=0.3); plt.legend()
+
+
+# Runs Schema Code
+if __name__ == '__main__':
+    target_coefficients = [25, 18, 31, -14, 7, -19]
+
+    # Choose GA parameters for a clear schema effect:
+    # high crossover emphasises defining length; modest mutation to reduce noise.
+    pc = 0.8
+    pm = 0.08
+    N  = 200
+    generations = 180
+
+    log, meta = schema_experiment(
+        target_coeffs=target_coefficients,
+        bits_per_coeff=8,
+        pc=pc, pm=pm, N=N, generations=generations,
+        coeff_min=-100, coeff_max=100,
+        elitism=4, k=3, step=1
+    )
+    plot_schema_results(log, meta)
+
+    # ratio_short = [(fh/fb) if fb>0 and fh>0 else 0 for fh,fb in zip(log['fH_short'], log['fbar'])]
+    # ratio_long  = [(fh/fb) if fb>0 and fh>0 else 0 for fh,fb in zip(log['fH_long'],  log['fbar'])]
+    # plt.figure(figsize=(9,4))
+    # plt.plot(log['gen'], ratio_short, label='f(H_short)/f̄', color='green')
+    # plt.plot(log['gen'], ratio_long, label='f(H_long)/f̄', color='red')
+    # plt.axhline(1.0, color='gray', linestyle=':')
+    # plt.xlabel('Generation'); plt.ylabel('Selection multiplier'); plt.title('Schema selection advantage')
+    # plt.grid(True, alpha=0.3); plt.legend()
+    # plt.show()
+
+    # Setup data (from your code)
+    generations = log['gen']
+    mut_short = [(1 - meta['pm']) ** meta['oS']] * len(generations)
+    mut_long = [(1 - meta['pm']) ** meta['oL']] * len(generations)
+    cross_short = [1 - meta['pc'] * (meta['dS'] / (meta['L'] - 1))] * len(generations)
+    cross_long = [1 - meta['pc'] * (meta['dL'] / (meta['L'] - 1))] * len(generations)
+
+    # Create side-by-side plots [1][2][3][7]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 4))
+
+    # Mutation Survival plot
+    ax1.plot(generations, mut_short, label='H_short mutation survival', color='green')
+    ax1.plot(generations, mut_long, label='H_long mutation survival', color='red')
+    ax1.set_xlabel('Generation')
+    ax1.set_ylabel('Survival fraction')
+    ax1.set_title('Mutation Survival Probability')
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
+
+    # Crossover Survival plot
+    ax2.plot(generations, cross_short, label='H_short crossover survival', color='green')
+    ax2.plot(generations, cross_long, label='H_long crossover survival', color='red')
+    ax2.set_xlabel('Generation')
+    ax2.set_ylabel('Survival fraction')
+    ax2.set_title('Crossover Survival Probability')
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
+
+    plt.tight_layout()
     plt.show()
+
+    # # Mutation effect plot
+    # mut_short = [(1 - meta['pm']) ** meta['oS']] * len(log['gen'])
+    # mut_long  = [(1 - meta['pm']) ** meta['oL']] * len(log['gen'])
+    # plt.figure(figsize=(7,4))
+    # plt.plot(log['gen'], mut_short, label='H_short mutation survival', color='green')
+    # plt.plot(log['gen'], mut_long, label='H_long mutation survival', color='red')
+    # plt.xlabel('Generation'); plt.ylabel('Survival fraction'); plt.title('Mutation Survival Probability')
+    # plt.grid(True, alpha=0.3); plt.legend()
+    # plt.show()
+
+
+    # # Crossover effect plot
+    # # For all generations and both H_short and H_long:
+    # cross_short = [1 - meta['pc'] * (meta['dS'] / (meta['L'] - 1))] * len(log['gen'])
+    # cross_long  = [1 - meta['pc'] * (meta['dL'] / (meta['L'] - 1))] * len(log['gen'])
+    # plt.figure(figsize=(7,4))
+    # plt.plot(log['gen'], cross_short, label='H_short crossover survival', color='green')
+    # plt.plot(log['gen'], cross_long, label='H_long crossover survival', color='red')
+    # plt.xlabel('Generation'); plt.ylabel('Survival fraction'); plt.title('Crossover Survival Probability')
+    # plt.grid(True, alpha=0.3); plt.legend()
+    # plt.show()
+    # --- Print schema effects for H_short ---
+
+
+
+
+    # # Optional: selection multiplier f(H)/f̄
+    # ratio_short = [(fh/fb) if fb>0 and fh>0 else 0 for fh,fb in zip(log['fH_short'], log['fbar'])]
+    # ratio_long  = [(fh/fb) if fb>0 and fh>0 else 0 for fh,fb in zip(log['fH_long'],  log['fbar'])]
+    # plt.figure(figsize=(9,4))
+    # plt.plot(log['gen'], ratio_short, label='f(H_short)/f̄', color='green')
+    # plt.plot(log['gen'], ratio_long, label='f(H_long)/f̄', color='red')
+    # plt.axhline(1.0, color='gray', linestyle=':')
+    # plt.xlabel('Generation'); plt.ylabel('Selection multiplier'); plt.title('Schema selection advantage')
+    # plt.grid(True, alpha=0.3); plt.legend()
+    # plt.show()
 
 # ---------------- Run ----------------
 # Runs the GA with fixed parameters and plots fitness history
@@ -433,59 +423,3 @@ def plot_schema_results(log, meta):
 #     plt.title(f'Pure GA for Coefficients (pop={p_count})')
 #     plt.grid(True, alpha=0.3); plt.legend()
 #     plt.show()
-
-# Plots generation vs parameter sweeps for mutation rate, crossover rate, and population size
-# if __name__ == '__main__':
-#     target_coefficients = [25, 18, 31, -14, 7, -19]
-
-#     # Arrays to test (reasonable ranges with more points)
-#     mutation_rates  = [0.00, 0.01, 0.03, 0.05, 0.10, 0.15, 0.20, 0.30, 0.50]
-#     crossover_rates = [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.80, 0.90]
-#     pop_sizes       = list(range(10, 241, 20))
-
-#     # Use your existing mutation sweep
-#     means_pm, std_pm, rate_pm = sweep_mutation_rates(
-#         target_coeffs=target_coefficients,
-#         mutation_rates=mutation_rates,
-#         trials=12, N=150, pc=0.90, max_generations=350,
-#         elitism=4, k=3, step=1
-#     )
-#     plot_mutation_sweep(mutation_rates, means_pm, std_pm)
-
-#     # Crossover sweep
-#     means_pc, std_pc, rate_pc = sweep_crossover_rates(
-#         target_coeffs=target_coefficients,
-#         crossover_rates=crossover_rates,
-#         trials=12, N=150, pm=0.12, max_generations=350,
-#         elitism=4, k=3, step=1
-#     )
-#     plot_crossover_sweep(crossover_rates, means_pc, std_pc)
-
-#     # Population size sweep
-#     means_N, std_N, rate_N = sweep_population_sizes(
-#         target_coeffs=target_coefficients,
-#         pop_sizes=pop_sizes,
-#         trials=12, pc=0.90, pm=0.12, max_generations=350,
-#         elitism=4, k=3, step=1
-#     )
-#     plot_population_sweep(pop_sizes, means_N, std_N)
-
-# Runs Schema Code
-if __name__ == '__main__':
-    target_coefficients = [25, 18, 31, -14, 7, -19]
-
-    # Choose GA parameters for a clear schema effect:
-    # high crossover emphasizes defining length; modest mutation to reduce noise.
-    pc = 0.95
-    pm = 0.08
-    N  = 200
-    generations = 180
-
-    log, meta = schema_experiment(
-        target_coeffs=target_coefficients,
-        bits_per_coeff=16,
-        pc=pc, pm=pm, N=N, generations=generations,
-        coeff_min=-100, coeff_max=100,
-        elitism=4, k=3, step=1
-    )
-    plot_schema_results(log, meta)

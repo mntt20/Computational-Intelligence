@@ -47,14 +47,6 @@ def two_point_crossover(p1, p2):
 
 # ---------------- Mutation ----------------
 
-def mutate_individual(ind, min_val, max_val, pm=0.1, step=1):
-    """Per-gene random perturbation by ±step with prob pm."""
-    child = ind[:]
-    for i in range(len(child)):
-        if random() < pm:
-            delta = randint(-step, step)
-            child[i] = max(min_val, min(max_val, child[i] + delta))
-    return child
 
 # ---------------- Evolution (pure GA) ----------------
 
@@ -62,8 +54,8 @@ def evolve(pop, target_coeffs,
            min_val=-100, max_val=100,
            elitism=2,  # keep top-k unchanged
            tournament_k=3,
-           pc=0.9,     # crossover probability
-           pm=0.15,    # per-gene mutation probability
+           pc=0.8,     # crossover probability
+           pm=0.01,    # per-gene mutation probability
            step=1):
     # Elitism
     ranked = sorted(pop, key=lambda x: fitness(x, target_coeffs))
@@ -83,12 +75,18 @@ def evolve(pop, target_coeffs,
         else:
             c1, c2 = p1[:], p2[:]
 
-        # mutation
-        c1 = mutate_individual(c1, min_val, max_val, pm=pm, step=step)
+        # mutation (random reset)
+        for g in range(len(c1)):
+            if random() < pm:
+                c1[g] = randint(min_val, max_val)
+        for g in range(len(c2)):
+            if random() < pm:
+                c2[g] = randint(min_val, max_val)
+
+        # append
         if len(next_pop) < N:
             next_pop.append(c1)
         if len(next_pop) < N:
-            c2 = mutate_individual(c2, min_val, max_val, pm=pm, step=step)
             next_pop.append(c2)
 
     # exact size
@@ -112,7 +110,7 @@ def generations_to_solution(target_coeffs, N, pc, pm, max_generations,
 def sweep_mutation_rates(target_coeffs,
                          mutation_rates,
                          trials=10,
-                         N=150, pc=0.90, max_generations=350,
+                         N=150, pc=0.80, max_generations=350,
                          elitism=4, k=3, step=1,
                          coeff_min=-100, coeff_max=100, genome_len=6):
     means, stds, solve_rates = [], [], []
@@ -132,7 +130,7 @@ def sweep_mutation_rates(target_coeffs,
 
 
 def plot_mutation_sweep(mutation_rates, means, stds,
-                        fixed_pc=0.90, fixed_N=150, trials=12, max_generations=350):
+                        fixed_pc=0.80, fixed_N=150, trials=12, max_generations=350):
     plt.figure(figsize=(8.5,5))
     plt.errorbar(mutation_rates, means, yerr=stds, fmt='-o', capsize=4, linewidth=1.6,
                  label=f'pc={fixed_pc}, Population={fixed_N}, Trials={trials}, Cap={max_generations}')
@@ -146,7 +144,7 @@ def plot_mutation_sweep(mutation_rates, means, stds,
 def sweep_crossover_rates(target_coeffs,
                           crossover_rates,
                           trials=10,
-                          N=150, pm=0.12, max_generations=350,
+                          N=150, pm=0.1, max_generations=350,
                           elitism=4, k=3, step=1,
                           coeff_min=-100, coeff_max=100, genome_len=6):
     means, stds, solve_rates = [], [], []
@@ -165,7 +163,7 @@ def sweep_crossover_rates(target_coeffs,
     return np.array(means), np.array(stds), np.array(solve_rates)
 
 def plot_crossover_sweep(crossover_rates, means, stds,
-                         fixed_pm=0.12, fixed_N=150, trials=12, max_generations=350):
+                         fixed_pm=0.1, fixed_N=150, trials=12, max_generations=350):
     plt.figure(figsize=(8.5,5))
     plt.errorbar(crossover_rates, means, yerr=stds, fmt='-o', capsize=4, linewidth=1.6,
                  label=f'pm={fixed_pm}, Population={fixed_N}, Trials={trials}, Cap={max_generations}')
@@ -180,7 +178,7 @@ def plot_crossover_sweep(crossover_rates, means, stds,
 def sweep_population_sizes(target_coeffs,
                            pop_sizes,
                            trials=10,
-                           pc=0.90, pm=0.12, max_generations=350,
+                           pc=0.80, pm=0.1, max_generations=350,
                            elitism=4, k=3, step=1,
                            coeff_min=-100, coeff_max=100, genome_len=6):
     means, stds, solve_rates = [], [], []
@@ -199,7 +197,7 @@ def sweep_population_sizes(target_coeffs,
     return np.array(means), np.array(stds), np.array(solve_rates)
 
 def plot_population_sweep(pop_sizes, means, stds,
-                          fixed_pm=0.12, fixed_pc=0.90, trials=12, max_generations=350):
+                          fixed_pm=0.1, fixed_pc=0.80, trials=12, max_generations=350):
     plt.figure(figsize=(8.5,5))
     plt.errorbar(pop_sizes, means, yerr=stds, fmt='-o', capsize=4, linewidth=1.6,
                  label=f'pm={fixed_pm}, pc={fixed_pc}, Trials={trials}, Cap={max_generations}')
@@ -259,7 +257,7 @@ def plot_population_sweep(pop_sizes, means, stds,
 
 #     # Plot
 #     plt.figure(figsize=(9,5))
-#     plt.plot(fitness_history, label='Average Fitness', marker='o', lw=1.2)
+#     plt.plot(fitness_history, label='Average Fitness', lw=1.2)
 #     plt.plot(best_history, label='Best Fitness', lw=1.6)
 #     plt.xlabel('Generation'); plt.ylabel('Avg Abs Error per Coefficient')
 #     plt.title(f'Pure GA for Coefficients (pop={p_count})')
@@ -278,7 +276,7 @@ if __name__ == '__main__':
     means_pm, std_pm, rate_pm = sweep_mutation_rates(
         target_coeffs=target_coefficients,
         mutation_rates=mutation_rates,
-        trials=12, N=150, pc=0.90, max_generations=350,
+        trials=12, N=150, pc=0.80, max_generations=350,
         elitism=4, k=3, step=1
     )
     plot_mutation_sweep(mutation_rates, means_pm, std_pm)
@@ -287,7 +285,7 @@ if __name__ == '__main__':
     means_pc, std_pc, rate_pc = sweep_crossover_rates(
         target_coeffs=target_coefficients,
         crossover_rates=crossover_rates,
-        trials=12, N=150, pm=0.12, max_generations=350,
+        trials=12, N=150, pm=0.1, max_generations=350,
         elitism=4, k=3, step=1
     )
     plot_crossover_sweep(crossover_rates, means_pc, std_pc)
@@ -296,7 +294,7 @@ if __name__ == '__main__':
     means_N, std_N, rate_N = sweep_population_sizes(
         target_coeffs=target_coefficients,
         pop_sizes=pop_sizes,
-        trials=12, pc=0.90, pm=0.12, max_generations=350,
+        trials=12, pc=0.80, pm=0.1, max_generations=350,
         elitism=4, k=3, step=1
     )
     plot_population_sweep(pop_sizes, means_N, std_N)
